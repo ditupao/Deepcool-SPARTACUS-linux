@@ -38,6 +38,7 @@ def load_settings():
         "items": {"cpu": True, "gpu": False, "board": False, "power_cpu": True,
                   "power_gpu": False, "cpu_use": False, "load": False, "pump": False,
                   "fan": False, "clock": False}})
+    s.setdefault("screensaver", {"style": "bounce", "clock": True})
     return s
 
 _rapl = {"e": None, "t": None, "max": None}
@@ -201,7 +202,8 @@ def api_state():
         try: media = load_manifest(os.path.join(MEDIA_ROOT, os.path.basename(str(s["media"]))))
         except Exception: media = {"id": s["media"], "title": "(丢失)"}
     return jsonify(mode=s["mode"], media=media, sensors=read_sensors(),
-                   dashboard=s["dashboard"], overlay=s["overlay"])
+                   dashboard=s["dashboard"], overlay=s["overlay"],
+                   screensaver=s["screensaver"])
 
 @app.get("/api/media/list")
 def api_list():
@@ -226,6 +228,18 @@ def api_back():
     s = load_settings(); s["mode"] = "dashboard"
     save_settings(s)
     return jsonify(ok=True)
+
+@app.post("/api/screensaver")
+def api_screensaver():
+    data = request.get_json(force=True)
+    st = data.get("style", "bounce")
+    if st not in ("bounce", "gradient", "stars"):
+        return jsonify(error="样式参数无效"), 400
+    s = load_settings()
+    s["screensaver"] = {"style": st, "clock": bool(data.get("clock", True))}
+    s["mode"] = "screensaver"
+    save_settings(s)
+    return jsonify(ok=True, screensaver=s["screensaver"])
 
 @app.post("/api/overlay")
 def api_overlay():
@@ -400,6 +414,14 @@ button:hover{filter:brightness(1.12)}
 <label>标题 <input type="text" id="title" maxlength="28" style="width:240px"></label>
 <div id="switches"></div>
 <div class="row" style="margin-top:12px"><button onclick="applyDash()">应用并切到仪表盘</button></div></div>
+<div class="card"><h2>防烧屏屏保（独立模式 · 画面逐帧变化，像素轮换点亮）</h2>
+<label>样式 <select id="savStyle">
+<option value="bounce">弹跳 Logo（撞边换色）</option>
+<option value="gradient">流动渐变</option>
+<option value="stars">星空漫步</option>
+</select></label>
+<label style="font-weight:600"><input type="checkbox" id="savClock">角标时钟（位置持续微动）</label>
+<div class="row" style="margin-top:12px"><button onclick="savOn()">启用屏保模式</button><span id="savMsg"></span></div></div>
 <div class="card"><h2>媒体 OSD 悬浮层（播放图片/GIF/视频时叠加）</h2>
 <label style="font-weight:600"><input type="checkbox" id="ovEnabled">启用悬浮层</label>
 <label>位置 <select id="ovPos">
@@ -436,7 +458,7 @@ async function jget(u){return await (await fetch(u)).json()}
 async function jpost(u,b){return await (await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})})).json()}
 async function refresh(){
   try{S=await jget("/api/state")}catch(e){document.getElementById("modePill").textContent="后端离线";return}
-  document.getElementById("modePill").textContent=S.mode==="media"?("播放中: "+((S.media&&(S.media.title||S.media.id))||"?")):"仪表盘模式";
+  document.getElementById("modePill").textContent=S.mode==="media"?("播放中: "+((S.media&&(S.media.title||S.media.id))||"?")):(S.mode==="screensaver"?"防烧屏屏保模式":"仪表盘模式");
   const sn=S.sensors||{};
   const chip=(l,v,u)=>`<span class="sensor">${l}<b>${v===undefined||v===null?"-":v+(u||"")}</b></span>`;
   document.getElementById("sensors").innerHTML=
@@ -458,6 +480,9 @@ async function refresh(){
     document.getElementById("ovPos").value=o.pos||"br";
     document.getElementById("ovSize").value=o.size||"M";
     OVL.forEach(([k])=>{document.getElementById("ovsw_"+k).checked=!!oi[k]});
+    const sv=S.screensaver||{};
+    document.getElementById("savStyle").value=sv.style||"bounce";
+    document.getElementById("savClock").checked=sv.clock!==false;
   }
   if(!ED)renderMedia();
 }
@@ -477,6 +502,13 @@ async function applyDash(){
   const db={title:document.getElementById("title").value};
   SW.forEach(([k])=>db[k]=document.getElementById("sw_"+k).checked);
   await jpost("/api/dashboard",{dashboard:db});refresh();
+}
+async function savOn(){
+  const msg=document.getElementById("savMsg");
+  msg.textContent="已启用";
+  await jpost("/api/screensaver",{style:document.getElementById("savStyle").value,
+                                  clock:document.getElementById("savClock").checked});
+  refresh();setTimeout(()=>msg.textContent="",2500);
 }
 async function applyOvl(){
   const o={enabled:document.getElementById("ovEnabled").checked,

@@ -10,9 +10,9 @@
 # protocol, independently implemented for interoperability).
 # See LICENSE and NOTICE for license, purpose limitation and references.
 #
-# 模式: dashboard(卡片可配) | media(图片/GIF/视频) + OSD 悬浮信息层
+# 模式: dashboard(卡片可配) | media(图片/GIF/视频) + OSD | screensaver(防烧屏屏保)
 # 协议: EP4 init -> Start(LE32 len + LE16 sum + u8 blocks) + trans*N(505B) + DCLdfinish
-import glob, os, struct, sys, time, json
+import colorsys, glob, math, os, random, struct, sys, time, json
 import usb.core, usb.util
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
@@ -30,6 +30,9 @@ DEFAULT_OVL = {"enabled": False, "pos": "br", "size": "M",
                "items": {"cpu": True, "gpu": False, "board": False,
                          "power_cpu": True, "power_gpu": False, "cpu_use": False,
                          "load": False, "pump": False, "fan": False, "clock": False}}
+DEFAULT_SAV = {"style": "bounce", "clock": True}
+SAV_STYLES = ("bounce", "gradient", "stars")
+_sav = {"init": False, "n": 0}
 
 _cache = {"mtime": None, "data": None}
 def settings_mtime():
@@ -52,6 +55,9 @@ def load_settings():
     o = s.setdefault("overlay", {})
     for k, v in DEFAULT_OVL.items():
         o.setdefault(k, v)
+    sv = s.setdefault("screensaver", {})
+    for k, v in DEFAULT_SAV.items():
+        sv.setdefault(k, v)
     _cache.update(mtime=mt, data=s)
     return s
 
@@ -278,6 +284,80 @@ def overlay_jpeg(jpeg, ocfg):
         print("overlay error: %s" % e, flush=True)
         return jpeg
 
+def _sav_reset():
+    _sav.update(init=True, n=0,
+                x=float(random.randrange(30, 200)), y=float(random.randrange(30, 180)),
+                vx=random.choice((3.0, 4.0, 5.0)) * random.choice((1, -1)),
+                vy=random.choice((2.4, 3.2, 4.2)) * random.choice((1, -1)),
+                hue=float(random.randrange(360)))
+
+def render_screensaver(scfg, d=None):
+    """防烧屏屏保: 每帧画面都不同, 像素随时间轮换点亮/熄灭, 均衡老化。
+    bounce=弹跳 Logo 撞边换色 | gradient=流动渐变 | stars=星空"""
+    if not _sav.get("init"):
+        _sav_reset()
+    st = _sav; st["n"] += 1; n = st["n"]
+    style = (scfg or {}).get("style", "bounce")
+    W = H = 480
+    if style == "gradient":
+        base = Image.new("RGB", (120, 120)); px = base.load()
+        h0 = (n * 3) % 360
+        for yy in range(120):
+            for xx in range(120):
+                hh = ((h0 + xx * 1.6 + yy * 1.1) % 360) / 360.0
+                vv = 0.45 + 0.28 * math.sin(math.radians(xx * 3 + yy * 2 + n * 5))
+                r_, g_, b_ = colorsys.hsv_to_rgb(hh, 0.78, max(0.15, vv))
+                px[xx, yy] = (int(r_ * 255), int(g_ * 255), int(b_ * 255))
+        img = base.resize((W, H), Image.BILINEAR)
+    elif style == "stars":
+        neb = Image.new("RGB", (60, 60), (6, 9, 22))
+        nd = ImageDraw.Draw(neb)
+        rnd = random.Random((n // 20) * 104729 + 7)  # 星云每 10s  redraw
+        dx = 6 * math.sin(n * 0.05); dy = 6 * math.cos(n * 0.04)  # 缓慢漂移
+        for _ in range(4):  # 淡星云: 低分辨率绘制, 平滑放大后柔和过渡
+            cx = rnd.randrange(-5, 65) + dx; cy = rnd.randrange(-5, 65) + dy
+            rr = rnd.randrange(9, 22)
+            r_, g_, b_ = colorsys.hsv_to_rgb(rnd.randrange(360) / 360.0, 0.55, 0.9)
+            nd.ellipse([cx - rr, cy - rr, cx + rr, cy + rr],
+                       fill=(int(r_ * 44), int(g_ * 44), int(b_ * 44)))
+        img = neb.resize((W, H), Image.BICUBIC)
+        dr = ImageDraw.Draw(img)
+        rnd2 = random.Random(n * 7919 + 13)  # 星点逐帧闪烁
+        for _ in range(120):
+            x = rnd2.randrange(W); y = rnd2.randrange(H)
+            r = rnd2.choice((1, 1, 1, 2, 2, 3)); bgt = rnd2.uniform(0.45, 1.0)
+            dr.ellipse([x - r, y - r, x + r, y + r],
+                       fill=(int(255 * bgt), int(255 * bgt), int(252 * bgt)))
+    else:  # bounce — 经典弹跳 logo, 撞边换色
+        img = Image.new("RGB", (W, H), (10, 12, 26))
+        dr = ImageDraw.Draw(img)
+        bw, bh = 260, 66
+        st["x"] += st["vx"]; st["y"] += st["vy"]
+        hit = False
+        if st["x"] <= 0: st["x"] = 0; st["vx"] = abs(st["vx"]); hit = True
+        elif st["x"] >= W - bw: st["x"] = W - bw; st["vx"] = -abs(st["vx"]); hit = True
+        if st["y"] <= 0: st["y"] = 0; st["vy"] = abs(st["vy"]); hit = True
+        elif st["y"] >= H - bh: st["y"] = H - bh; st["vy"] = -abs(st["vy"]); hit = True
+        if hit: st["hue"] = (st["hue"] + 47) % 360
+        r_, g_, b_ = colorsys.hsv_to_rgb(st["hue"] / 360.0, 0.80, 0.92)
+        col = (int(r_ * 255), int(g_ * 255), int(b_ * 255))
+        dr.rounded_rectangle([st["x"], st["y"], st["x"] + bw, st["y"] + bh],
+                             radius=12, fill=col)
+        dr.text((st["x"] + bw / 2, st["y"] + bh / 2), "SPARTACUS",
+                font=fnt(34), fill=(12, 14, 30), anchor="mm")
+    if (scfg or {}).get("clock", True):
+        dr = ImageDraw.Draw(img)
+        jx = int(6 * math.sin(n * 0.55)); jy = int(6 * math.sin(n * 0.41 + 1.7))
+        txt = time.strftime("%H:%M:%S")
+        if d and d.get("cpu") is not None:
+            txt += "  %d°C" % round(d["cpu"])
+        f = fnt(28)
+        tw = f.getbbox(txt)[2] - f.getbbox(txt)[0]
+        x0 = W - 16 - tw + jx; y0 = H - 40 + jy
+        dr.text((x0, y0), txt, font=f, fill=(90, 100, 130))
+        dr.text((x0 - 2, y0 - 2), txt, font=f, fill=(235, 240, 250))
+    return img
+
 def play_media(ep2, media_dir, mt0, ocfg):
     try:
         with open(os.path.join(media_dir, "manifest.json")) as f:
@@ -307,6 +387,11 @@ def preview(path):
     read_sensors(); time.sleep(0.35)
     d = read_sensors()
     s = load_settings()
+    if s["mode"] == "screensaver":
+        for _ in range(6):  # 前进几步, 截一张有代表性的画面
+            img = render_screensaver(s.get("screensaver"), d)
+        img.save(path, "JPEG", quality=90)
+        print("preview(screensaver):", path); return
     if s["mode"] == "media" and s.get("media"):
         f0 = os.path.join(MEDIA_ROOT, os.path.basename(str(s["media"])), "f00001.jpg")
         if os.path.exists(f0):
@@ -335,6 +420,12 @@ def main():
             if s["mode"] == "media" and s.get("media"):
                 play_media(ep2, os.path.join(MEDIA_ROOT, os.path.basename(str(s["media"]))),
                            mt0, s.get("overlay"))
+            elif s["mode"] == "screensaver":
+                buf = BytesIO()
+                render_screensaver(s.get("screensaver"), read_sensors()).save(
+                    buf, "JPEG", quality=90)
+                send_frame(ep2, build_frame(buf.getvalue()))
+                time.sleep(1.0 / DASH_FPS)
             else:
                 jpeg = make_jpeg(s["dashboard"])
                 if jpeg != last_jpeg:

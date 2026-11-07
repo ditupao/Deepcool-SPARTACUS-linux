@@ -43,6 +43,10 @@ Dashboard mode running on real hardware:
 - **OSD overlay** — float live telemetry (temperatures, power, usage, RPM,
   clock) on top of any playing media: 6 positions, 3 font sizes,
   10 selectable items, semi-transparent rounded panel with stroked text.
+- **Anti burn-in screensaver mode** — a standalone mode where the picture
+  changes every frame so pixels age evenly: bouncing logo that swaps color
+  on wall hits (DVD-style), flowing HSV gradient, or a drifting starfield.
+  Optional corner clock whose position micro-jitters to avoid ghosting.
 - **Hot reload** — the push daemon watches the settings file; changes from
   the web console take effect within a second, no restart.
 - **Robust** — auto-reconnects to the device, systemd-managed, survives
