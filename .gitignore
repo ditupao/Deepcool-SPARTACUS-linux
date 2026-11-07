@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.lf
+*.tmp
+*.bak
+.env
+.venv/
+venv/
+media_store/
+.DS_Store
+
+# Engineering / protocol notes: kept local only, intentionally not published
+docs/PROTOCOL.md
+docs/PROTOCOL_zh.md

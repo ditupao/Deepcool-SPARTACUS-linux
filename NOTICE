@@ -1,0 +1,87 @@
+NOTICE
+======
+
+SPARTACUS-linux
+Copyright (c) 2026 The SPARTACUS-linux Authors
+Licensed under the MIT License (see LICENSE).
+
+This product is not affiliated with, endorsed by, or sponsored by
+DeepCool Co., Ltd. "DeepCool" and "ICE BINGYU / 冰暴" are trademarks of
+their respective owners and are used here for identification purposes only.
+
+Purpose limitation & disclaimer
+-------------------------------
+
+This project is intended and provided for RESEARCH, EDUCATION and
+INTEROPERABILITY purposes only, namely: enabling an already lawfully
+purchased device to function on a general-purpose operating system.
+
+1. No affiliation. This is an independent community project. It is not
+   licensed by, authorized by, sponsored by, or endorsed by DeepCool.
+2. Interoperability scope. The protocol implemented here was derived
+   solely by observing the input/output behaviour of the device on a
+   legally acquired system, for the purpose of interoperability. No
+   vendor specification, SDK, firmware image, artwork or other
+   copyrightable asset was copied, disassembled for redistribution, or
+   redistributed in this repository.
+3. Use at your own risk. The software performs raw USB writes and sensor
+   access. The authors assume no liability for any direct or indirect
+   damage, loss of functionality, data loss, or warranty disputes arising
+   from use or misuse of this software or of the information in this
+   repository.
+4. Purposes beyond research/interoperability. Any commercial or other use
+   of this project or of its findings beyond research and interoperability
+   is undertaken at the user's own discretion, and any resulting legal,
+   commercial or operational risk rests with the user and is unrelated to
+   this project and its authors.
+5. Warranty. The software is provided AS IS with ABSOLUTELY NO WARRANTY,
+   to the maximum extent permitted by the MIT License (see LICENSE).
+
+Trademark and documentation courtesy: if the manufacturer wishes any
+protocol documentation, device identifiers or wording in this repository
+to be modified or removed, the authors are open to cooperating promptly.
+
+Referenced community projects
+-----------------------------
+
+1. Mr-Pian/Deepcool-Bingyu-serise-software-for-linux
+   https://github.com/Mr-Pian/Deepcool-Bingyu-serise-software-for-linux
+   License: MIT
+   Role: prior art of the same protocol family. It documents the
+   DeepCool Bingyu LT/LS variant (USB 3633:0026, 320x240 RGB565 raw
+   frames). SPARTACUS-linux implements a different, independently
+   developed variant (USB 3633:0027, 480x480, JPEG push).
+   No source code was copied from this project; it was studied for
+   handshake/reset patterns and general device behaviour.
+
+2. liquidctl (Jon Sparkes / Callum Stewart et al.)
+   https://github.com/liquidctl/liquidctl
+   License: GPLv3
+   Role: general insight into DeepCool USB peripheral protocols and
+   the Linux userspace approach. No code was copied or linked.
+
+Runtime dependencies (not bundled)
+----------------------------------
+
+- Python 3            PSF License
+- Flask               BSD-3-Clause  (web console)
+- Pillow              MIT-CMU / HPND (rendering, image/GIF decoding)
+- PyUSB               LGPL-2.1-or-later (USB transport; dynamically
+                      imported, no linking of modified LGPL sources)
+- ffmpeg / ffprobe    LGPL/GPL as distributed by your distro (only
+                      invoked as an external helper for video
+                      transcoding; SPARTACUS works without them for
+                      images and GIFs)
+
+Protocol implementation statement
+---------------------------------
+
+The wire protocol implemented in src/ was derived by observing the
+input/output behaviour of the device under a mainstream desktop operating
+system, solely for the purpose of interoperability — making an already
+purchased device usable on Linux. No vendor specification, SDK, binary or
+firmware was consulted, disassembled, linked or redistributed (clean-room
+style implementation). Detailed engineering notes and capture data are
+maintained outside this repository and are not part of this distribution.
+No vendor firmware, images, fonts or data assets are redistributed here;
+the device already contains its own boot animation and assets.

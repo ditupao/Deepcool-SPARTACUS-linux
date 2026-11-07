@@ -1,0 +1,10 @@
+<!-- libvirt hostdev fragment: USB passthrough of the DeepCool LCD.
+     Use with: virsh attach-device <vm> this.xml --live [--config]
+     Also consider adding a matching <unmanaged> or udev rule so libvirt
+     can reclaim the device cleanly. -->
+<hostdev mode='subsystem' type='usb' managed='yes'>
+  <source>
+    <vendor id='0x3633'/>
+    <product id='0x0027'/>
+  </source>
+</hostdev>
