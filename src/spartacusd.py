@@ -32,7 +32,9 @@ DEFAULT_OVL = {"enabled": False, "pos": "br", "size": "M",
                          "load": False, "pump": False, "fan": False, "clock": False}}
 DEFAULT_SAV = {"style": "bounce", "clock": True}
 SAV_STYLES = ("bounce", "gradient", "stars")
+SAV_FPS = 15.0          # 屏保独立帧率 (dashboard 仍是 DASH_FPS)
 _sav = {"init": False, "n": 0}
+_sav_fps = []           # 实测帧率采样
 
 _cache = {"mtime": None, "data": None}
 def settings_mtime():
@@ -287,8 +289,8 @@ def overlay_jpeg(jpeg, ocfg):
 def _sav_reset():
     _sav.update(init=True, n=0,
                 x=float(random.randrange(30, 200)), y=float(random.randrange(30, 180)),
-                vx=random.choice((3.0, 4.0, 5.0)) * random.choice((1, -1)),
-                vy=random.choice((2.4, 3.2, 4.2)) * random.choice((1, -1)),
+                vx=random.choice((35.0, 48.0, 60.0)) * random.choice((1, -1)),
+                vy=random.choice((28.0, 38.0, 50.0)) * random.choice((1, -1)),
                 hue=float(random.randrange(360)))
 
 def render_screensaver(scfg, d=None):
@@ -301,19 +303,19 @@ def render_screensaver(scfg, d=None):
     W = H = 480
     if style == "gradient":
         base = Image.new("RGB", (120, 120)); px = base.load()
-        h0 = (n * 3) % 360
+        h0 = (n * 0.4) % 360                    # 6°/s
         for yy in range(120):
             for xx in range(120):
                 hh = ((h0 + xx * 1.6 + yy * 1.1) % 360) / 360.0
-                vv = 0.45 + 0.28 * math.sin(math.radians(xx * 3 + yy * 2 + n * 5))
+                vv = 0.45 + 0.28 * math.sin(math.radians(xx * 3 + yy * 2 + n * 0.7))
                 r_, g_, b_ = colorsys.hsv_to_rgb(hh, 0.78, max(0.15, vv))
                 px[xx, yy] = (int(r_ * 255), int(g_ * 255), int(b_ * 255))
         img = base.resize((W, H), Image.BILINEAR)
     elif style == "stars":
         neb = Image.new("RGB", (60, 60), (6, 9, 22))
         nd = ImageDraw.Draw(neb)
-        rnd = random.Random((n // 20) * 104729 + 7)  # 星云每 10s  redraw
-        dx = 6 * math.sin(n * 0.05); dy = 6 * math.cos(n * 0.04)  # 缓慢漂移
+        rnd = random.Random((n // 150) * 104729 + 7)  # 星云每 10s redraw
+        dx = 6 * math.sin(n * 0.0067); dy = 6 * math.cos(n * 0.0053)  # 缓慢漂移
         for _ in range(4):  # 淡星云: 低分辨率绘制, 平滑放大后柔和过渡
             cx = rnd.randrange(-5, 65) + dx; cy = rnd.randrange(-5, 65) + dy
             rr = rnd.randrange(9, 22)
@@ -322,17 +324,23 @@ def render_screensaver(scfg, d=None):
                        fill=(int(r_ * 44), int(g_ * 44), int(b_ * 44)))
         img = neb.resize((W, H), Image.BICUBIC)
         dr = ImageDraw.Draw(img)
-        rnd2 = random.Random(n * 7919 + 13)  # 星点逐帧闪烁
-        for _ in range(120):
-            x = rnd2.randrange(W); y = rnd2.randrange(H)
-            r = rnd2.choice((1, 1, 1, 2, 2, 3)); bgt = rnd2.uniform(0.45, 1.0)
+        if "field" not in _sav:  # 星空位置固定一次, 亮度随时间呼吸:
+            rndf = random.Random(20261108)  # 避免高速下呈雪花噪点, 防老化不变
+            _sav["field"] = [
+                (rndf.randrange(W), rndf.randrange(H),
+                 rndf.choice((1, 1, 1, 2, 2, 3)),
+                 rndf.uniform(0.0, 6.28), rndf.uniform(0.8, 3.2))
+                for _ in range(120)]
+        t = n / SAV_FPS
+        for x, y, r, ph0, sp in _sav["field"]:
+            bgt = 0.45 + 0.55 * abs(math.sin(t * sp + ph0))
             dr.ellipse([x - r, y - r, x + r, y + r],
                        fill=(int(255 * bgt), int(255 * bgt), int(252 * bgt)))
     else:  # bounce — 经典弹跳 logo, 撞边换色
         img = Image.new("RGB", (W, H), (10, 12, 26))
         dr = ImageDraw.Draw(img)
         bw, bh = 260, 66
-        st["x"] += st["vx"]; st["y"] += st["vy"]
+        st["x"] += st["vx"] / SAV_FPS; st["y"] += st["vy"] / SAV_FPS  # vx 单位 px/s
         hit = False
         if st["x"] <= 0: st["x"] = 0; st["vx"] = abs(st["vx"]); hit = True
         elif st["x"] >= W - bw: st["x"] = W - bw; st["vx"] = -abs(st["vx"]); hit = True
@@ -346,21 +354,22 @@ def render_screensaver(scfg, d=None):
         dr.text((st["x"] + bw / 2, st["y"] + bh / 2), "SPARTACUS",
                 font=fnt(34), fill=(12, 14, 30), anchor="mm")
     if (scfg or {}).get("clock", True):
-        jx = int(6 * math.sin(n * 0.55)); jy = int(6 * math.sin(n * 0.41 + 1.7))
+        jx = int(6 * math.sin(n * 0.073)); jy = int(6 * math.sin(n * 0.055 + 1.7))
         txt = time.strftime("%H:%M:%S")
         if d and d.get("cpu") is not None:
             txt += "  %d°C" % round(d["cpu"])
         f = fnt(28)
         bb = f.getbbox(txt); tw = bb[2] - bb[0]
-        CYC = 40                                # 每角停留 20s (2fps)
+        CYC = int(20 * SAV_FPS)                 # 每角停留 20s
         corner = (n // CYC) % 4                 # 右下→左下→左上→右上
         ph = n % CYC
         if corner == 0:   bx, by = W - 16 - tw, H - 40
         elif corner == 1: bx, by = 16,          H - 40
         elif corner == 2: bx, by = 16,          12
         else:             bx, by = W - 16 - tw, 12
-        # 换角前后各 4 帧淡入淡出, 切换瞬间完全熄灭, 不留重影
-        a = int(255 * max(0.0, min(1.0, min(ph, CYC - 1 - ph) / 4.0)))
+        # 换角前后各 2s 淡入淡出, 切换瞬间完全熄灭, 不留重影
+        a = int(255 * max(0.0, min(1.0,
+            min(ph, CYC - 1 - ph) / (2.0 * SAV_FPS))))
         ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         od = ImageDraw.Draw(ov)
         x0 = bx + jx; y0 = by + jy
@@ -432,11 +441,18 @@ def main():
                 play_media(ep2, os.path.join(MEDIA_ROOT, os.path.basename(str(s["media"]))),
                            mt0, s.get("overlay"))
             elif s["mode"] == "screensaver":
+                t0 = time.time()
                 buf = BytesIO()
                 render_screensaver(s.get("screensaver"), read_sensors()).save(
-                    buf, "JPEG", quality=90)
+                    buf, "JPEG", quality=88)
                 send_frame(ep2, build_frame(buf.getvalue()))
-                time.sleep(1.0 / DASH_FPS)
+                _sav_fps.append(time.time())
+                if len(_sav_fps) >= int(SAV_FPS * 10):
+                    span = _sav_fps[-1] - _sav_fps[0]
+                    print("screensaver 实测帧率: %.1f fps (目标 %g)" % (
+                        (len(_sav_fps) - 1) / span, SAV_FPS), flush=True)
+                    _sav_fps.clear()
+                time.sleep(max(0.0, 1.0 / SAV_FPS - (time.time() - t0)))
             else:
                 jpeg = make_jpeg(s["dashboard"])
                 if jpeg != last_jpeg:

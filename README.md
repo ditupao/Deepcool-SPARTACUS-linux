@@ -43,11 +43,13 @@ Dashboard mode running on real hardware:
 - **OSD overlay** — float live telemetry (temperatures, power, usage, RPM,
   clock) on top of any playing media: 6 positions, 3 font sizes,
   10 selectable items, semi-transparent rounded panel with stroked text.
-- **Anti burn-in screensaver mode** — a standalone mode where the picture
-  changes every frame so pixels age evenly: bouncing logo that swaps color
-  on wall hits (DVD-style), flowing HSV gradient, or a drifting starfield.
-  Optional clock + CPU-temp badge that patrols all four corners (crossfade
-  transition) while micro-jittering every frame — no pixel stays lit.
+- **Anti burn-in screensaver mode** — a standalone, 15 fps mode where the
+  picture changes every frame so pixels age evenly: bouncing logo that
+  swaps color on wall hits (DVD-style), flowing HSV gradient, or a
+  starfield with slowly drifting nebulae and per-star breathing
+  brightness. Clock + CPU-temp badge patrols all four corners (with
+  crossfade transition) while micro-jittering every frame — no pixel
+  stays lit.
 - **Hot reload** — the push daemon watches the settings file; changes from
   the web console take effect within a second, no restart.
 - **Robust** — auto-reconnects to the device, systemd-managed, survives
@@ -129,8 +131,9 @@ The panel speaks a vendor-specific **JPEG push protocol** over bulk USB: a
 short session-init packet, followed by 512-byte framed blocks that carry the
 JPEG payload together with length, checksum and block-count fields which the
 device firmware validates on every frame. A continuous low-rate push (≈2 fps)
-keeps the display session alive. The driver implements the whole data path
-itself, with no vendor software, SDK or firmware involved.
+keeps the display session alive (the screensaver mode pushes faster, at 15
+fps). The driver implements the whole data path itself, with no vendor
+software, SDK or firmware involved.
 
 ## Related projects
 
