@@ -46,7 +46,8 @@ Dashboard mode running on real hardware:
 - **Anti burn-in screensaver mode** — a standalone mode where the picture
   changes every frame so pixels age evenly: bouncing logo that swaps color
   on wall hits (DVD-style), flowing HSV gradient, or a drifting starfield.
-  Optional corner clock whose position micro-jitters to avoid ghosting.
+  Optional clock + CPU-temp badge that patrols all four corners (crossfade
+  transition) while micro-jittering every frame — no pixel stays lit.
 - **Hot reload** — the push daemon watches the settings file; changes from
   the web console take effect within a second, no restart.
 - **Robust** — auto-reconnects to the device, systemd-managed, survives

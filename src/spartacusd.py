@@ -346,16 +346,27 @@ def render_screensaver(scfg, d=None):
         dr.text((st["x"] + bw / 2, st["y"] + bh / 2), "SPARTACUS",
                 font=fnt(34), fill=(12, 14, 30), anchor="mm")
     if (scfg or {}).get("clock", True):
-        dr = ImageDraw.Draw(img)
         jx = int(6 * math.sin(n * 0.55)); jy = int(6 * math.sin(n * 0.41 + 1.7))
         txt = time.strftime("%H:%M:%S")
         if d and d.get("cpu") is not None:
             txt += "  %d°C" % round(d["cpu"])
         f = fnt(28)
-        tw = f.getbbox(txt)[2] - f.getbbox(txt)[0]
-        x0 = W - 16 - tw + jx; y0 = H - 40 + jy
-        dr.text((x0, y0), txt, font=f, fill=(90, 100, 130))
-        dr.text((x0 - 2, y0 - 2), txt, font=f, fill=(235, 240, 250))
+        bb = f.getbbox(txt); tw = bb[2] - bb[0]
+        CYC = 40                                # 每角停留 20s (2fps)
+        corner = (n // CYC) % 4                 # 右下→左下→左上→右上
+        ph = n % CYC
+        if corner == 0:   bx, by = W - 16 - tw, H - 40
+        elif corner == 1: bx, by = 16,          H - 40
+        elif corner == 2: bx, by = 16,          12
+        else:             bx, by = W - 16 - tw, 12
+        # 换角前后各 4 帧淡入淡出, 切换瞬间完全熄灭, 不留重影
+        a = int(255 * max(0.0, min(1.0, min(ph, CYC - 1 - ph) / 4.0)))
+        ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        od = ImageDraw.Draw(ov)
+        x0 = bx + jx; y0 = by + jy
+        od.text((x0, y0), txt, font=f, fill=(90, 100, 130, a))
+        od.text((x0 - 2, y0 - 2), txt, font=f, fill=(235, 240, 250, a))
+        img = Image.alpha_composite(img.convert("RGBA"), ov).convert("RGB")
     return img
 
 def play_media(ep2, media_dir, mt0, ocfg):
